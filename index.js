@@ -3,7 +3,8 @@ const multer = require('multer');
 const { S3Client, ListObjectsV2Command, GetObjectCommand, PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { Upload } = require("@aws-sdk/lib-storage");
 const dotenv = require('dotenv');
-const cors= require('cors');
+const cors = require('cors');
+const fs = require('fs');
 
 dotenv.config();
 
@@ -13,12 +14,12 @@ const port = 3000;
 
 
 // Create S3 client with explicit credentials
-const s3Client = new S3Client({ 
-  region:"ap-south-1",
-    credentials:{
-        accessKeyId:"AKIAT7VYXNPSFIOG6ZWV",
-        secretAccessKey:"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",
-    }
+const s3Client = new S3Client({
+  region: "ap-south-1",
+  credentials: {
+    accessKeyId: "AKIAT7VYXNPSFIOG6ZWV",
+    secretAccessKey: "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",
+  }
 });
 
 app.use(cors());
@@ -28,37 +29,41 @@ app.use(express.urlencoded({ extended: true }));
 const upload = multer({ dest: 'uploads/' });
 
 // Get all files from S3 bucket
-  app.get('/files', async (req, res) => {
-    try {
-      const data = await s3Client.send(new ListObjectsV2Command({ Bucket: process.env.S3_BUCKET_NAME }));
-      console.log(data);
-      const files = data.Contents.map(file => {
-        const fileUrl = `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${file.Key}`;
-        return { name: file.Key, url: fileUrl };
-      });
-      res.json(files);
-    } catch (err) {
-      console.error('Error fetching files:', err);
-      res.status(500).json({ error: 'Internal server error' });
-    }
-  });
+app.get('/files', async (req, res) => {
+  try {
+    const data = await s3Client.send(new ListObjectsV2Command({ Bucket: process.env.S3_BUCKET_NAME }));
+    console.log(data);
+    const files = data.Contents.map(file => {
+      const fileUrl = `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${file.Key}`;
+      return { name: file.Key, url: fileUrl };
+    });
+    res.json(files);
+  } catch (err) {
+    console.error('Error fetching files:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 // Upload a file to S3 bucket
 app.post('/files', upload.single('file'), async (req, res) => {
-   const file = req.file;
+  const file = req.file;
   if (!file) {
     res.status(400).json({ error: 'No file uploaded' });
     return;
   }
-   const params = {
+
+  const filePath = file.path;
+  const fileStream = fs.createReadStream(filePath);
+
+  const params = {
     Bucket: process.env.S3_BUCKET_NAME,
     Key: file.originalname,
-    // Body:file.
+    Body: fileStream
   };
- 
+
   try {
-  const data=  await s3Client.send(new PutObjectCommand(params));
-  console.log('data',data);
+    const data = await s3Client.send(new PutObjectCommand(params));
+    console.log('data', data);
     res.json({ message: 'File uploaded successfully' });
   } catch (err) {
     console.error('Error uploading file:', err);
