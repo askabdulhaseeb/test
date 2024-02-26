@@ -61,6 +61,7 @@ app.post('/files', upload.single('file'), async (req, res) => {
     Body: fileStream
   };
 
+  
   try {
     const data = await s3Client.send(new PutObjectCommand(params));
     console.log('data', data);
